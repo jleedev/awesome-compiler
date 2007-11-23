@@ -87,17 +87,30 @@ parseLoc = do
     es <- many $ brackets parseExpr
     return $ LocIndex i es
 
-parseExpr = choice $ map try [parseBinary, parseUnary, parseFactor]
-
-parseBinary = undefined
-
-parseUnary = undefined
+parseExpr = try parseOperator <|> parseFactor
 
 parseFactor = choice $ map try [ parens parseExpr
                                , fmap LocExpr parseLoc
                                , fmap LitReal float
                                , fmap LitNum integer
                                , (reserved "true" >> return (LitBool True))
-                               , (reserved "false" >> return (LitBool False))]
+                               , (reserved "false" >> return (LitBool False))
+                               ]
+
+parseOperator = buildExpressionParser operatorTable parseFactor
+
+operatorTable = [ [prefix "!" OpNot]
+                , [prefix "-" OpNeg]
+                , [binary "*" OpMul, binary "/" OpDiv]
+                , [binary "+" OpAdd, binary "-" OpSub]
+                , [binary "<" OpLT, binary ">" OpGT,
+                   binary "<=" OpLE, binary ">=" OpGE]
+                , [binary "==" OpEQ, binary "!=" OpNE]
+                , [binary "&&" OpAnd]
+                , [binary "||" OpOr]]
+    where binary s f = Infix (reservedOp s >> return (BinExpr f) <?>
+              "operator") AssocLeft
+          prefix s f = Prefix (reservedOp s >> return (UnExpr f) <?>
+              "operator")
 
 -- }}}

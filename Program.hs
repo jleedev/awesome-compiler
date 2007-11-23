@@ -36,6 +36,5 @@ data Expr = BinExpr Op Expr Expr
 
 data Op = OpAdd | OpSub | OpMul | OpDiv
         | OpLT  | OpGT  | OpEQ  | OpNE | OpGE | OpLE
-        | OpAnd | OpOr  | OpNot
-        | OpAssign
+        | OpAnd | OpOr  | OpNot | OpNeg
         deriving Show
