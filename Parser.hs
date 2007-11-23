@@ -1,6 +1,10 @@
 -- vim:fdm=marker ts=4 sw=4 et
 
-module Parser where
+module Parser (
+    parseProgram, parseBlock, parseDecl, parseBasicType, parseStmt,
+    parseAssignment, parseIfStmt, parseIfElse, parseWhile, parseDoWhile,
+    parseBreak, parseLoc, parseExpr, parseFactor, parseOperator
+) where
 
 import Text.ParserCombinators.Parsec
 import Text.ParserCombinators.Parsec.Expr
