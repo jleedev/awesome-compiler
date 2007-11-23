@@ -23,13 +23,12 @@ data Stmt = StmtAssign  Loc Expr
           | StmtBlock   Block
           deriving Show
 
-data Loc = LocIndex  Loc Expr
-         | LocScalar ID
+data Loc = LocIndex ID [Expr]
          deriving Show
 
 data Expr = BinExpr Op Expr Expr
           | UnExpr  Op Expr
-          | Loc
+          | LocExpr Loc
           | LitNum TypeNum
           | LitReal TypeReal
           | LitBool Bool

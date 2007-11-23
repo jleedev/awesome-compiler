@@ -1,46 +1,102 @@
+-- vim:fdm=marker ts=4 sw=4 et
+
 module Parser where
 
 import Text.ParserCombinators.Parsec
-import Text.ParserCombinators.Parsec.Language
 import Text.ParserCombinators.Parsec.Expr
-import Text.ParserCombinators.Parsec.Token
 
 import Program
+import Scanner
 
-lexicalRules = LanguageDef
-    { commentStart   = "/*"
-    , commentEnd     = "*/"
-    , commentLine    = "//"
-    , nestedComments = True
-    , identStart     = letter
-    , identLetter    = alphaNum <|> char '_'
-    , opStart = oneOf "=+-*/<>=!&|"
-    , opLetter = opStart lexicalRules
-    , reservedNames = words "if else do while break int float"
-    , reservedOpNames = words "= + - * / < > == != <= >= && || !"
-    , caseSensitive  = True
-    }
-
-lexer = makeTokenParser lexicalRules
-
-parseProgram = do whiteSpace lexer
+-- Blocks {{{
+parseProgram = do whiteSpace
                   b <- parseBlock
                   eof
                   return $ Program b
 
-parseBlock = braces lexer $ do
+parseBlock = braces $ do
     d <- many parseDecl
     s <- return [] --many parseStmt
     return $ Block d s
+-- }}}
 
+-- Declarations {{{
 parseDecl = do
     b <- parseBasicType
-    d <- many (squares lexer $ natural lexer)
-    i <- identifier lexer
-    semi lexer
+    d <- many (squares $ natural)
+    i <- identifier
+    semi
     return $ Decl (Type b d) i
 
-parseBasicType = (symbol lexer "int" >> return BasicInt)
-    <|> (symbol lexer "float" >> return BasicFloat)
+parseBasicType = (reserved "int" >> return BasicInt)
+    <|> (reserved "float" >> return BasicFloat)
+-- }}}
 
-parseStmt = undefined
+-- Statements {{{
+parseStmt = choice [parseAssignment,
+                    parseIfStmt,
+                    parseIfElse,
+                    parseWhile,
+                    parseDoWhile,
+                    parseBreak,
+                    semi >> return StmtEmpty,
+                    fmap StmtBlock parseBlock]
+
+parseAssignment = do
+    l <- parseLoc
+    reservedOp "="
+    e <- parseExpr
+    semi
+    return $ StmtAssign l e
+
+parseIfStmt = do
+    reserved "if"
+    e <- parens parseExpr
+    s <- parseStmt
+    return $ StmtIf e s
+
+parseIfElse = do
+    StmtIf e s <- parseIfStmt
+    reserved "else"
+    s' <- parseStmt
+    return $ StmtIfElse e s s'
+
+parseWhile = do
+    reserved "while"
+    e <- parens parseExpr
+    s <- parseStmt
+    return $ StmtWhile e s
+
+parseDoWhile = do
+    reserved "do"
+    s <- parseStmt
+    reserved "while"
+    e <- parens parseExpr
+    return $ StmtDoWhile s e
+
+parseBreak = do
+    reserved "break"
+    semi
+    return StmtBreak
+-- }}}
+
+-- Expressions {{{
+parseLoc = do
+    i <- identifier
+    es <- many $ brackets parseExpr
+    return $ LocIndex i es
+
+parseExpr = choice $ map try [parseBinary, parseUnary, parseFactor]
+
+parseBinary = undefined
+
+parseUnary = undefined
+
+parseFactor = parens parseExpr
+    <|> fmap LocExpr parseLoc
+    <|> fmap LitReal float
+    <|> fmap LitNum integer
+    <|> (reserved "true" >> return (LitBool True))
+    <|> (reserved "false" >> return (LitBool False))
+
+-- }}}
