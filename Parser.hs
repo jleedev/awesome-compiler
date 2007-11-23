@@ -3,7 +3,7 @@ module Parser where
 import Text.ParserCombinators.Parsec
 import Text.ParserCombinators.Parsec.Language
 import Text.ParserCombinators.Parsec.Expr
-import qualified Text.ParserCombinators.Parsec.Token as P
+import Text.ParserCombinators.Parsec.Token
 
 import Program
 
@@ -21,37 +21,26 @@ lexicalRules = LanguageDef
     , caseSensitive  = True
     }
 
-lexer      = P.makeTokenParser lexicalRules
-braces     = P.braces lexer
-identifier = P.identifier lexer
-lexeme     = P.lexeme lexer
-semiSep1   = P.semiSep1 lexer
-semi       = P.semi lexer
-squares    = P.squares lexer
-symbol     = P.symbol lexer
-whiteSpace = P.whiteSpace lexer
+lexer = makeTokenParser lexicalRules
 
-parseProgram = do whiteSpace
+parseProgram = do whiteSpace lexer
                   b <- parseBlock
                   eof
                   return $ Program b
 
-parseBlock = braces $ do
+parseBlock = braces lexer $ do
     d <- many parseDecl
     s <- return [] --many parseStmt
     return $ Block d s
 
 parseDecl = do
     b <- parseBasicType
-    d <- many parseDimension
-    i <- identifier
-    semi
+    d <- many (squares lexer $ natural lexer)
+    i <- identifier lexer
+    semi lexer
     return $ Decl (Type b d) i
 
-parseBasicType = (symbol "int" >> return BasicInt)
-    <|> (symbol "float" >> return BasicFloat)
-
-parseDimension :: Parser TypeNum
-parseDimension = squares $ read `fmap` (lexeme $ many1 digit)
+parseBasicType = (symbol lexer "int" >> return BasicInt)
+    <|> (symbol lexer "float" >> return BasicFloat)
 
 parseStmt = undefined
