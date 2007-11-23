@@ -31,24 +31,19 @@ squares    = P.squares lexer
 symbol     = P.symbol lexer
 whiteSpace = P.whiteSpace lexer
 
-list unit = try (do { x <- unit;
-                      xs <- list unit;
-                      return $ x:xs
-                      }) <|> return []
-
 parseProgram = do whiteSpace
                   b <- parseBlock
                   eof
                   return $ Program b
 
 parseBlock = braces $ do
-    d <- list parseDecl
-    s <- return [] --list parseStmt
+    d <- many parseDecl
+    s <- return [] --many parseStmt
     return $ Block d s
 
 parseDecl = do
     b <- parseBasicType
-    d <- list parseDimension
+    d <- many parseDimension
     i <- identifier
     semi
     return $ Decl (Type b d) i
