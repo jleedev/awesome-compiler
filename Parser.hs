@@ -23,7 +23,7 @@ parseBlock = braces $ do
 -- Declarations {{{
 parseDecl = do
     b <- parseBasicType
-    d <- many (squares $ natural)
+    d <- many $ squares natural
     i <- identifier
     semi
     return $ Decl (Type b d) i
