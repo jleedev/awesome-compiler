@@ -21,7 +21,7 @@ lexicalRules = LanguageDef
     , caseSensitive  = True
     }
 
-lexer = P.makeTokenParser lexicalRules
+lexer      = P.makeTokenParser lexicalRules
 braces     = P.braces lexer
 identifier = P.identifier lexer
 lexeme     = P.lexeme lexer
