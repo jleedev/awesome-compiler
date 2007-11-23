@@ -116,5 +116,4 @@ operatorTable = [ [prefix "!" OpNot]
               "operator") AssocLeft
           prefix s f = Prefix (reservedOp s >> return (UnExpr f) <?>
               "operator")
-
 -- }}}
