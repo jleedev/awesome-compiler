@@ -24,6 +24,7 @@ lexicalRules = LanguageDef
 lexer = P.makeTokenParser lexicalRules
 braces     = P.braces lexer
 identifier = P.identifier lexer
+lexeme     = P.lexeme lexer
 semiSep1   = P.semiSep1 lexer
 semi       = P.semi lexer
 squares    = P.squares lexer
@@ -56,6 +57,6 @@ parseBasicType = (symbol "int" >> return BasicInt)
     <|> (symbol "float" >> return BasicFloat)
 
 parseDimension :: Parser TypeNum
-parseDimension = squares $ read `fmap` many1 digit
+parseDimension = squares $ read `fmap` (lexeme $ many1 digit)
 
 parseStmt = undefined
