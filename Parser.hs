@@ -1,58 +1,63 @@
 module Parser where
 
 import Text.ParserCombinators.Parsec
+import Text.ParserCombinators.Parsec.Language
+import Text.ParserCombinators.Parsec.Expr
+import qualified Text.ParserCombinators.Parsec.Token as P
 
 import Program
 
-type PrgParser = GenParser Token PrgState Program
+lexicalRules = LanguageDef
+    { commentStart   = "/*"
+    , commentEnd     = "*/"
+    , commentLine    = "//"
+    , nestedComments = True
+    , identStart     = letter
+    , identLetter    = alphaNum <|> char '_'
+    , opStart = oneOf "=+-*/<>=!&|"
+    , opLetter = opStart lexicalRules
+    , reservedNames = words "if else do while break int float"
+    , reservedOpNames = words "= + - * / < > == != <= >= && || !"
+    , caseSensitive  = True
+    }
 
-program :: Parser Program
-program = do b <- block
-             eof
-             return $ Program b
+lexer = P.makeTokenParser lexicalRules
+braces     = P.braces lexer
+identifier = P.identifier lexer
+semiSep1   = P.semiSep1 lexer
+semi       = P.semi lexer
+squares    = P.squares lexer
+symbol     = P.symbol lexer
+whiteSpace = P.whiteSpace lexer
 
-block :: Parser Block
-block = between (char '{') (char '}') $ do
-    spaces
-    d <- decls
-    spaces
-    s <- stmts
-    spaces
+list unit = try (do { x <- unit;
+                      xs <- list unit;
+                      return $ x:xs
+                      }) <|> return []
+
+--binaryOperatorTable = [[op "=" (BinExpr OpAssign) AssocRight]] where op = Infix ...
+
+parseProgram = do whiteSpace
+                  b <- parseBlock
+                  eof
+                  return $ Program b
+
+parseBlock = braces $ do
+    d <- list parseDecl
+    s <- return [] --list parseStmt
     return $ Block d s
 
-decls :: Parser [Decl]
-decls = try $ do d <- decl
-                 ds <- decls
-                 return (d:ds)
-    <|> return []
+parseDecl = do
+    b <- parseBasicType
+    d <- list parseDimension
+    i <- identifier
+    semi
+    return $ Decl (Type b d) i
 
-decl :: Parser Decl
-decl = do t <- typep
-          spaces
-          i <- idp
-          spaces
-          char ';'
-          return $ Decl t i
+parseBasicType = (symbol "int" >> return BasicInt)
+    <|> (symbol "float" >> return BasicFloat)
 
-typep :: Parser Type
-typep = do b <- basic
-           d <- try (spaces >> dimension) `sepBy` spaces
-           return $ Type b d
+parseDimension :: Parser TypeNum
+parseDimension = squares $ read `fmap` many1 digit
 
-dimension :: Parser Dimension
-dimension = between (char '[') (char ']') num
-
-basic :: Parser BasicType
-basic = do string "int"; return BasicInt
-    <|> do string "float"; return BasicFloat
-
-stmts :: Parser [Stmt]
-stmts = return []
-
-num :: Parser TypeNum
-num = fmap read $ many1 digit
-
-idp :: Parser ID
-idp = do c <- letter
-         s <- many $ alphaNum <|> char '_'
-         return (c:s)
+parseStmt = undefined
