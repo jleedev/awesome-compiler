@@ -16,7 +16,7 @@ parseProgram = do whiteSpace
 
 parseBlock = braces $ do
     d <- many parseDecl
-    s <- return [] --many parseStmt
+    s <- many parseStmt
     return $ Block d s
 -- }}}
 
@@ -33,14 +33,14 @@ parseBasicType = (reserved "int" >> return BasicInt)
 -- }}}
 
 -- Statements {{{
-parseStmt = choice [parseAssignment,
-                    parseIfStmt,
-                    parseIfElse,
-                    parseWhile,
-                    parseDoWhile,
-                    parseBreak,
-                    semi >> return StmtEmpty,
-                    fmap StmtBlock parseBlock]
+parseStmt = choice $ map try [ parseAssignment
+                             , parseIfElse
+                             , parseIfStmt
+                             , parseWhile
+                             , parseDoWhile
+                             , parseBreak
+                             , semi >> return StmtEmpty
+                             , fmap StmtBlock parseBlock]
 
 parseAssignment = do
     l <- parseLoc
@@ -72,6 +72,7 @@ parseDoWhile = do
     s <- parseStmt
     reserved "while"
     e <- parens parseExpr
+    semi
     return $ StmtDoWhile s e
 
 parseBreak = do
@@ -92,11 +93,11 @@ parseBinary = undefined
 
 parseUnary = undefined
 
-parseFactor = parens parseExpr
-    <|> fmap LocExpr parseLoc
-    <|> fmap LitReal float
-    <|> fmap LitNum integer
-    <|> (reserved "true" >> return (LitBool True))
-    <|> (reserved "false" >> return (LitBool False))
+parseFactor = choice $ map try [ parens parseExpr
+                               , fmap LocExpr parseLoc
+                               , fmap LitReal float
+                               , fmap LitNum integer
+                               , (reserved "true" >> return (LitBool True))
+                               , (reserved "false" >> return (LitBool False))]
 
 -- }}}
