@@ -35,8 +35,6 @@ list unit = try (do { x <- unit;
                       return $ x:xs
                       }) <|> return []
 
---binaryOperatorTable = [[op "=" (BinExpr OpAssign) AssocRight]] where op = Infix ...
-
 parseProgram = do whiteSpace
                   b <- parseBlock
                   eof
