@@ -11,6 +11,7 @@ import Text.ParserCombinators.Parsec.Expr
 
 import Program
 import Scanner
+import Block
 
 -- Blocks {{{
 parseProgram = do whiteSpace
@@ -30,6 +31,8 @@ parseDecl = do
     d <- many $ squares natural
     i <- identifier
     semi
+    updateState $ addDecl i False (Type b d)
+    return ()
     return $ Decl (Type b d) i
 
 parseBasicType = (reserved "int" >> return BasicInt)

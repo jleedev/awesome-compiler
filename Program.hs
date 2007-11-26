@@ -9,9 +9,18 @@ type TypeReal = Double
 data Program = Program Block deriving Show
 data Block = Block [Decl] [Stmt] deriving Show
 
-data Decl = Decl Type ID deriving Show
-data Type = Type BasicType [Dimension] deriving Show
-data BasicType = BasicInt | BasicFloat deriving Show
+data Decl = Decl Type ID
+instance Show Decl where
+    show (Decl t i) = show t ++ " " ++ i ++ ";"
+
+data Type = Type BasicType [Dimension]
+instance Show Type where
+    show (Type b d) = show b ++ foldr (\h t -> "[" ++ show h ++ "]" ++ t) "" d
+
+data BasicType = BasicInt | BasicFloat
+instance Show BasicType where
+    show BasicInt = "int"
+    show BasicFloat = "float"
 
 data Stmt = StmtAssign  Loc Expr
           | StmtIf      Expr Stmt
