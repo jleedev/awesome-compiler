@@ -8,11 +8,15 @@ module Parser (
 
 import Text.ParserCombinators.Parsec
 import Text.ParserCombinators.Parsec.Expr
+import Debug.Trace (trace)
 
 import Program
 import Scanner
 import Block
 import Tac
+
+test :: String -> Either ParseError Program
+test = runParser parseProgram newCompilerState ""
 
 newLabel :: GenParser Char CompilerState Label
 newLabel = do
@@ -29,9 +33,10 @@ newTemp bt = do
 -- Blocks {{{
 parseProgram = do
     whiteSpace
-    setState newCompilerState
     b <- parseBlock
     eof
+    s <- getState
+    return $ trace (show s) ()
     return $ Program b
 
 parseBlock = braces $ do
