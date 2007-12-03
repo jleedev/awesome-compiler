@@ -5,7 +5,7 @@ module Tac (
     Instr (..)
 ) where
 
-import Program
+import Program (TypeNum, TypeReal, ID, Op)
 
 data Tac = Tac { instr  :: Instr
                , arg1   :: Maybe Arg

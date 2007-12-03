@@ -17,6 +17,11 @@ data Type = Type BasicType [Dimension]
 instance Show Type where
     show (Type b d) = show b ++ foldr (\h t -> "[" ++ show h ++ "]" ++ t) "" d
 
+getSize :: Type -> Int
+getSize (Type bt dim) = fromIntegral (product dim) * s bt
+    where s BasicInt = 4
+          s BasicFloat = 8
+
 data BasicType = BasicInt | BasicFloat
 instance Show BasicType where
     show BasicInt = "int"

@@ -12,12 +12,27 @@ import Text.ParserCombinators.Parsec.Expr
 import Program
 import Scanner
 import Block
+import Tac
+
+newLabel :: GenParser Char CompilerState Label
+newLabel = do
+    l <- fmap getLabel getState
+    updateState addLabel
+    return l
+
+newTemp :: BasicType -> GenParser Char CompilerState ID
+newTemp bt = do
+    l <- fmap getTemp getState
+    updateState . addTemp $ bt
+    return l
 
 -- Blocks {{{
-parseProgram = do whiteSpace
-                  b <- parseBlock
-                  eof
-                  return $ Program b
+parseProgram = do
+    whiteSpace
+    setState newCompilerState
+    b <- parseBlock
+    eof
+    return $ Program b
 
 parseBlock = braces $ do
     d <- many parseDecl
@@ -32,7 +47,7 @@ parseDecl = do
     i <- identifier
     semi
     updateState $ addDecl i False (Type b d)
-    return ()
+    return () -- We won't be returning the AST, eventually.
     return $ Decl (Type b d) i
 
 parseBasicType = (reserved "int" >> return BasicInt)
