@@ -1,57 +1,57 @@
 module Block (
-    Tree,
-    Symbol,
+    Symbol(..),
+    Env,
     SymbolTable, modifySymbolTable,
-    CompilerState,
-    newCompilerState,
+    Scope(..),
+    Blocks,
+    CompilerState(..), newCompilerState,
+    activationRecord,
+    openBlock, closeBlock, getLocals,
     addLabel, getLabel,
     addTemp, getTemp,
     addDecl
 ) where
 
 import qualified Data.Map as Map
-import Debug.Trace (trace)
 
 import Program
 import Tac
 
-data Tree a = Branch a [Tree a] deriving Show
-
-data Context a = Context { parent :: Maybe (Context a)
-                         , left   :: [Tree a]
-                         , right  :: [Tree a]
-                         , this   :: Tree a } deriving Show
-
-data Symbol = Symbol { isTemp  :: Bool
-                     , symKind :: Type
-                     , symAddr :: Int } deriving Show
+data Symbol = Symbol {
+    isTemp  :: Bool,
+    symKind :: Type,
+    symAddr :: Int
+} deriving Show
 
 type SymbolTable = Map.Map ID Symbol
 
--- before we parse the body of a do or while loop, we set breakPoint to
--- the label where break statements should jump to.
-data CompilerState = CompilerState { symbolTable :: Context SymbolTable
-                                   , breakPoint  :: Maybe Label
-                                   , nextLabel   :: Label
-                                   , nextTemp    :: Int } deriving Show
+data Scope = Scope {
+    table :: SymbolTable,
+    parent :: Env
+} deriving Show
 
-newCompilerState = CompilerState { symbolTable = newSymbolTable
-                                 , breakPoint  = Nothing
-                                 , nextLabel   = Label 0
-                                 , nextTemp    = 0 }
+type Blocks = Map.Map Env Scope
 
-newSymbolTable :: Context SymbolTable
-newSymbolTable = Context { parent = Nothing
-                         , left = []
-                         , right = []
-                         , this = Branch Map.empty [] }
+data CompilerState = CompilerState {
+    blocks :: Blocks,
+    locals :: Env,
+    nextEnv :: Env,
+    breakPoint :: Maybe Label,
+    nextLabel :: Label,
+    nextTemp :: Int
+} deriving Show
 
-activationRecord :: SymbolTable -> Int
-activationRecord = Map.fold (\a s -> getSize (symKind a) + s) 0
+newCompilerState = CompilerState {
+    blocks = Map.empty,
+    locals = 0,
+    nextEnv = 0,
+    breakPoint = Nothing,
+    nextLabel = Label 0,
+    nextTemp = 0
+}
 
-openBlock :: CompilerState -> CompilerState
-openBlock state@CompilerState { symbolTable = Context { this = st } } =
-    undefined
+activationRecord :: Scope -> Int
+activationRecord = (Map.fold (\a s -> getSize (symKind a) + s) 0) . table
 
 addLabel :: CompilerState -> CompilerState
 addLabel state@CompilerState { nextLabel = Label n } =
@@ -60,9 +60,9 @@ addLabel state@CompilerState { nextLabel = Label n } =
 getLabel = nextLabel
 
 addTemp :: BasicType -> CompilerState -> CompilerState
-addTemp typ state@CompilerState { nextTemp = n } =
-    state { nextTemp = n+1
-          , symbolTable = symbolTable $ addDecl ("_t" ++ show n) True (Type typ []) state }
+addTemp typ state = state' { nextTemp = n + 1 }
+    where state' = addDecl ("_t" ++ show n) True (Type typ []) state
+          n = nextTemp state
 
 getTemp = ("_t" ++) . show . nextTemp
 
@@ -76,5 +76,28 @@ addDecl :: ID ->   -- ^ symbol name
 addDecl i tmp typ = modifySymbolTable $
     Map.insert i Symbol { isTemp = tmp, symKind = typ, symAddr = 0 }
 
+openBlock :: CompilerState -> CompilerState
+openBlock state@CompilerState { blocks = bs, nextEnv = env } =
+    let new = Scope { table = Map.empty, parent = env }
+        env' = env + 1
+        in modifyBlocks (Map.insert env' new) state { locals = env', nextEnv = env' }
+
+closeBlock :: CompilerState -> CompilerState
+closeBlock state@CompilerState { blocks = bs, locals = env } =
+    let p = bs Map.! env
+        in state { locals = parent p }
+
+getLocals :: CompilerState -> Env
+getLocals = locals
+
+modifyBlocks :: (Blocks -> Blocks) -> CompilerState -> CompilerState
+modifyBlocks f state = state { blocks = blocks' }
+    where blocks' = f $ blocks state
+
 modifySymbolTable :: (SymbolTable -> SymbolTable) -> CompilerState -> CompilerState
-modifySymbolTable f state@CompilerState { symbolTable = c@Context { this = Branch st sub } } = state { symbolTable = c { this = Branch (f st) sub } }
+modifySymbolTable f state = modifyBlocks g state
+    where g bs = Map.insert env b' bs
+          b = bs Map.! env
+          b' = b { table = f $ table b }
+          bs = blocks state
+          env = locals state

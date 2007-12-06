@@ -1,6 +1,6 @@
 module Tac (
     Tac (..),
-    Arg (..),
+    Arg (..), Env,
     Label (..),
     Instr (..)
 ) where
@@ -13,10 +13,13 @@ data Tac = Tac { instr  :: Instr
                , result :: Arg
                } deriving Show
 
+type Env = Int
+
 data Arg = ArgNum   TypeNum
          | ArgReal  TypeReal
          | ArgID    ID
          | ArgLabel Label
+         | ArgEnv   Env
          deriving Show
 
 newtype Label = Label Int deriving Show
@@ -30,4 +33,5 @@ data Instr = InstrBinary Op
            | InstrLabel
            | InstrSet
            | InstrGet
+           | InstrEnv
            deriving Show

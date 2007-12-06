@@ -9,6 +9,7 @@ module Parser (
 import Text.ParserCombinators.Parsec
 import Text.ParserCombinators.Parsec.Expr
 import Debug.Trace (trace)
+import qualified Data.Map as Map
 
 import Program
 import Scanner
@@ -18,30 +19,50 @@ import Tac
 test :: String -> Either ParseError Program
 test = runParser parseProgram newCompilerState ""
 
-newLabel :: GenParser Char CompilerState Label
+-- State helpers {{{
+newLabel :: GenParser tok CompilerState Label
 newLabel = do
     l <- fmap getLabel getState
     updateState addLabel
     return l
 
-newTemp :: BasicType -> GenParser Char CompilerState ID
+newTemp :: BasicType -> GenParser tok CompilerState ID
 newTemp bt = do
     l <- fmap getTemp getState
     updateState . addTemp $ bt
     return l
+
+beginBlock :: GenParser tok CompilerState Env
+beginBlock = do
+    updateState openBlock
+    fmap getLocals getState
+
+endBlock :: GenParser tok CompilerState ()
+endBlock = do
+    s <- getState
+    debug . show . activationRecord $ blocks s Map.! locals s
+    updateState closeBlock
+
+debug :: (Show a) => a -> GenParser tok st ()
+debug s = do
+    return $ trace (show s) ()
+
+-- }}}
 
 -- Blocks {{{
 parseProgram = do
     whiteSpace
     b <- parseBlock
     eof
-    s <- getState
-    return $ trace (show s) ()
+    fmap debug getState
     return $ Program b
 
 parseBlock = braces $ do
+    e <- beginBlock
+    debug ("Env " ++ show e)
     d <- many parseDecl
     s <- many parseStmt
+    endBlock
     return $ Block d s
 -- }}}
 
