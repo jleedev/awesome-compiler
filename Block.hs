@@ -19,7 +19,7 @@ import Tac
 
 data Symbol = Symbol {
     isTemp  :: Bool,
-    symKind :: Type,
+    symType :: Type,
     symAddr :: Int
 } deriving Show
 
@@ -38,7 +38,8 @@ data CompilerState = CompilerState {
     nextEnv :: Env,
     breakPoint :: Maybe Label,
     nextLabel :: Label,
-    nextTemp :: Int
+    nextTemp :: Int,
+    code :: [Tac]
 } deriving Show
 
 newCompilerState = CompilerState {
@@ -47,11 +48,12 @@ newCompilerState = CompilerState {
     nextEnv = 0,
     breakPoint = Nothing,
     nextLabel = Label 0,
-    nextTemp = 0
+    nextTemp = 0,
+    code = []
 }
 
 activationRecord :: Scope -> Int
-activationRecord = (Map.fold (\a s -> getSize (symKind a) + s) 0) . table
+activationRecord = (Map.fold (\a s -> getSize (symType a) + s) 0) . table
 
 addLabel :: CompilerState -> CompilerState
 addLabel state@CompilerState { nextLabel = Label n } =
@@ -73,8 +75,10 @@ addDecl :: ID ->   -- ^ symbol name
            Bool -> -- ^ is temporary
            Type -> -- ^ kind of variable
            CompilerState -> CompilerState
-addDecl i tmp typ = modifySymbolTable $
-    Map.insert i Symbol { isTemp = tmp, symKind = typ, symAddr = 0 }
+addDecl i tmp typ state = (modifySymbolTable $
+    Map.insert i Symbol { isTemp = tmp, symType = typ, symAddr = addr })
+    $ state
+    where addr = activationRecord . getLocals $ state
 
 openBlock :: CompilerState -> CompilerState
 openBlock state@CompilerState { blocks = bs, nextEnv = env } =
@@ -87,8 +91,8 @@ closeBlock state@CompilerState { blocks = bs, locals = env } =
     let p = bs Map.! env
         in state { locals = parent p }
 
-getLocals :: CompilerState -> Env
-getLocals = locals
+getLocals :: CompilerState -> Scope
+getLocals state = blocks state Map.! locals state
 
 modifyBlocks :: (Blocks -> Blocks) -> CompilerState -> CompilerState
 modifyBlocks f state = state { blocks = blocks' }

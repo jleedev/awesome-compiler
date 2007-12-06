@@ -19,6 +19,9 @@ import Tac
 test :: String -> Either ParseError Program
 test = runParser parseProgram newCompilerState ""
 
+debug :: (Show a) => a -> GenParser tok st ()
+debug s = return $ trace (show s) ()
+
 -- State helpers {{{
 newLabel :: GenParser tok CompilerState Label
 newLabel = do
@@ -35,18 +38,13 @@ newTemp bt = do
 beginBlock :: GenParser tok CompilerState Env
 beginBlock = do
     updateState openBlock
-    fmap getLocals getState
+    fmap locals getState
 
 endBlock :: GenParser tok CompilerState ()
 endBlock = do
     s <- getState
     debug . show . activationRecord $ blocks s Map.! locals s
     updateState closeBlock
-
-debug :: (Show a) => a -> GenParser tok st ()
-debug s = do
-    return $ trace (show s) ()
-
 -- }}}
 
 -- Blocks {{{
@@ -54,7 +52,8 @@ parseProgram = do
     whiteSpace
     b <- parseBlock
     eof
-    fmap debug getState
+    s <- getState
+    debug s
     return $ Program b
 
 parseBlock = braces $ do
@@ -73,7 +72,6 @@ parseDecl = do
     i <- identifier
     semi
     updateState $ addDecl i False (Type b d)
-    return () -- We won't be returning the AST, eventually.
     return $ Decl (Type b d) i
 
 parseBasicType = (reserved "int" >> return BasicInt)
@@ -137,25 +135,25 @@ parseLoc = do
 
 parseExpr = try parseOperator <|> parseFactor
 
-parseFactor = choice $ map try [ parens parseExpr
-                               , fmap LocExpr parseLoc
-                               , fmap LitReal float
-                               , fmap LitNum integer
-                               , (reserved "true" >> return (LitBool True))
-                               , (reserved "false" >> return (LitBool False))
-                               ]
+parseFactor = choice $ map try [
+    parens parseExpr,
+    fmap LocExpr parseLoc,
+    fmap LitReal float,
+    fmap LitNum integer,
+    (reserved "true" >> return (LitBool True)),
+    (reserved "false" >> return (LitBool False))]
 
 parseOperator = buildExpressionParser operatorTable parseFactor
 
-operatorTable = [ [prefix "!" OpNot]
-                , [prefix "-" OpNeg]
-                , [binary "*" OpMul, binary "/" OpDiv]
-                , [binary "+" OpAdd, binary "-" OpSub]
-                , [binary "<" OpLT, binary ">" OpGT,
-                   binary "<=" OpLE, binary ">=" OpGE]
-                , [binary "==" OpEQ, binary "!=" OpNE]
-                , [binary "&&" OpAnd]
-                , [binary "||" OpOr]]
+operatorTable = [
+    [prefix "!" OpNot],
+    [prefix "-" OpNeg],
+    [binary "*" OpMul, binary "/" OpDiv],
+    [binary "+" OpAdd, binary "-" OpSub],
+    [binary "<" OpLT, binary ">" OpGT, binary "<=" OpLE, binary ">=" OpGE],
+    [binary "==" OpEQ, binary "!=" OpNE],
+    [binary "&&" OpAnd],
+    [binary "||" OpOr]]
     where binary s f = Infix (reservedOp s >> return (BinExpr f) <?>
               "operator") AssocLeft
           prefix s f = Prefix (reservedOp s >> return (UnExpr f) <?>
