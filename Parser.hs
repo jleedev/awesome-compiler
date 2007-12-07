@@ -1,9 +1,35 @@
--- vim:fdm=marker ts=4 sw=4 et
-
 module Parser (
-    parseProgram, parseBlock, parseDecl, parseBasicType, parseStmt,
-    parseAssignment, parseIfStmt, parseIfElse, parseWhile, parseDoWhile,
-    parseBreak, parseLoc, parseExpr, parseFactor{-, parseOperator-}
+    -- * Helper functions
+    test,
+    debug,
+    choiceTry,
+    newLabel,
+    newTemp,
+    beginBlock,
+    endBlock,
+    codeAppend,
+    -- * Parsers
+    -- ** Program structure
+    parseProgram,
+    parseBlock,
+    parseDecl,
+    parseBasicType,
+    -- ** Statements
+    parseStmt,
+    parseAssignment,
+    parseIfStmt,
+    parseIfElse,
+    parseWhile,
+    parseDoWhile,
+    parseBreak,
+    -- ** Expressions
+    parseLoc,
+    parseExpr,
+    parseOr, parseAnd, parseEq, parseRel, parseAdd, parseProd, parseUnary,
+    unary,
+    binary,
+    parseFactor,
+    parseLocExpr,
 ) where
 
 import Text.ParserCombinators.Parsec
@@ -17,11 +43,13 @@ import Tac
 
 type Compiler a = GenParser Char CompilerState a
 
+-- |Calls 'parseProgram', the main entry point for the compiler, with a
+-- new 'CompilerState'.
 test :: String -> Either ParseError CompilerState
 test = runParser parseProgram newCompilerState ""
 
 debug :: String -> Compiler ()
-debug s = return $ trace (">" ++ s) ()
+debug s = return $ trace ("> " ++ s) ()
 
 -- State helpers {{{
 choiceTry :: [Compiler a] -> Compiler a
@@ -29,7 +57,7 @@ choiceTry = choice . map try
 
 newLabel :: Compiler Label
 newLabel = do
-    l <- fmap getLabel getState
+    l <- fmap nextLabel getState
     updateState addLabel
     return l
 
@@ -55,18 +83,17 @@ codeAppend c = do
     s <- getState
     setState s { code = code s ++ [c] }
 
---codeReserve :: Compiler Int
---codeModify :: Int -> Tac -> Compiler()
-
 -- }}}
 
 -- Blocks {{{
+parseProgram :: Compiler CompilerState
 parseProgram = do
     whiteSpace
     b <- parseBlock
     eof
     getState
 
+parseBlock :: Compiler ()
 parseBlock = braces $ do
     e <- beginBlock
     debug $ "Env " ++ show e
@@ -101,6 +128,7 @@ parseStmt = choiceTry [
     semi >> return (),
     parseBlock]
 
+parseAssignment :: Compiler ()
 parseAssignment = do
     l <- parseLoc
     reservedOp "="
@@ -111,12 +139,14 @@ parseAssignment = do
             Tac InstrAssign (Just e) Nothing (Just $ ArgID i)
          _ -> fail "Assigning to arrays is not yet supported"
 
+parseIfStmt :: Compiler ()
 parseIfStmt = do
     reserved "if"
     e <- parens parseExpr
     s <- parseStmt
     codeAppend noop
 
+parseIfElse :: Compiler ()
 parseIfElse = do
     reserved "if"
     e <- parens parseExpr
@@ -125,12 +155,14 @@ parseIfElse = do
     s' <- parseStmt
     codeAppend noop
 
+parseWhile :: Compiler ()
 parseWhile = do
     reserved "while"
     e <- parens parseExpr
     s <- parseStmt
     codeAppend noop
 
+parseDoWhile :: Compiler ()
 parseDoWhile = do
     reserved "do"
     s <- parseStmt
@@ -139,6 +171,7 @@ parseDoWhile = do
     semi
     codeAppend noop
 
+parseBreak :: Compiler ()
 parseBreak = do
     reserved "break"
     semi
@@ -198,6 +231,7 @@ parseFactor = choiceTry [
     (reserved "true" >> return (ArgNum 1)),
     (reserved "false" >> return (ArgNum 0))]
 
+parseLocExpr :: Compiler Arg
 parseLocExpr = do
     l <- parseLoc
     case l of

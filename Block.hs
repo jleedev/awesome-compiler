@@ -1,4 +1,11 @@
+-- |
+-- All the data structures stored during the compilation are represented
+-- here. Apart from the bookkeeping devices in 'CompilerState', the main
+-- purpose is a graph of 'SymbolTable' objects, allowing identifiers to
+-- be looked up in the current and parent scopes.
+
 module Block (
+    -- | Oh yeah.
     Symbol(..),
     Env,
     SymbolTable, modifySymbolTable,
@@ -7,7 +14,7 @@ module Block (
     CompilerState(..), newCompilerState,
     activationRecord,
     openBlock, closeBlock, getLocals,
-    addLabel, getLabel,
+    addLabel,
     addTemp, getTemp,
     addDecl
 ) where
@@ -16,8 +23,9 @@ import qualified Data.Map as Map
 
 import Tac
 
+-- | A symbol.
 data Symbol = Symbol {
-    isTemp  :: Bool,
+    isTemp  :: Bool, -- ^ is this symbol temporary?
     symType :: Type,
     symAddr :: Int
 }
@@ -63,8 +71,6 @@ activationRecord = (Map.fold (\a s -> getSize (symType a) + s) 0) . table
 addLabel :: CompilerState -> CompilerState
 addLabel state@CompilerState { nextLabel = Label n } =
     state { nextLabel = Label (n+1) }
-
-getLabel = nextLabel
 
 addTemp :: BasicType -> CompilerState -> CompilerState
 addTemp typ state = state' { nextTemp = n + 1 }
