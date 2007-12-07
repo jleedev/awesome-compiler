@@ -1,7 +1,7 @@
 -- |
 -- All the data structures stored during the compilation are represented
 -- here. Apart from the bookkeeping devices in 'CompilerState', the main
--- purpose is a graph of 'SymbolTable' objects, allowing identifiers to
+-- purpose is a tree of 'SymbolTable' objects, allowing identifiers to
 -- be looked up in the current and parent scopes.
 
 module Block (
