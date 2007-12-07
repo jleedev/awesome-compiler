@@ -68,4 +68,5 @@ import IO
 
 main = do
     hSetBuffering stdin LineBuffering
-    fmap test getContents
+    c <- getContents
+    print (test c)
