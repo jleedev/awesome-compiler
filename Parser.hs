@@ -3,7 +3,7 @@
 module Parser (
     parseProgram, parseBlock, parseDecl, parseBasicType, parseStmt,
     parseAssignment, parseIfStmt, parseIfElse, parseWhile, parseDoWhile,
-    parseBreak, parseLoc, parseExpr, parseFactor, parseOperator
+    parseBreak, parseLoc, parseExpr, parseFactor{-, parseOperator-}
 ) where
 
 import Text.ParserCombinators.Parsec
@@ -11,40 +11,46 @@ import Text.ParserCombinators.Parsec.Expr
 import Debug.Trace (trace)
 import qualified Data.Map as Map
 
-import Program
 import Scanner
 import Block
 import Tac
 
-test :: String -> Either ParseError Program
+type Compiler a = GenParser Char CompilerState a
+
+test :: String -> Either ParseError CompilerState
 test = runParser parseProgram newCompilerState ""
 
-debug :: (Show a) => a -> GenParser tok st ()
-debug s = return $ trace (show s) ()
+debug :: String -> Compiler ()
+debug s = return $ trace (">" ++ s) ()
 
 -- State helpers {{{
-newLabel :: GenParser tok CompilerState Label
+newLabel :: Compiler Label
 newLabel = do
     l <- fmap getLabel getState
     updateState addLabel
     return l
 
-newTemp :: BasicType -> GenParser tok CompilerState ID
+newTemp :: BasicType -> Compiler ID
 newTemp bt = do
     l <- fmap getTemp getState
     updateState . addTemp $ bt
     return l
 
-beginBlock :: GenParser tok CompilerState Env
+beginBlock :: Compiler Env
 beginBlock = do
     updateState openBlock
     fmap locals getState
 
-endBlock :: GenParser tok CompilerState ()
+endBlock :: Compiler ()
 endBlock = do
     s <- getState
-    debug . show . activationRecord $ blocks s Map.! locals s
+    debug $ "Closing block " ++ show (blocks s Map.! locals s)
     updateState closeBlock
+
+codeAppend :: Tac -> Compiler ()
+codeAppend c = do
+    s <- getState
+    setState s { code = code s ++ [c] }
 -- }}}
 
 -- Blocks {{{
@@ -52,66 +58,71 @@ parseProgram = do
     whiteSpace
     b <- parseBlock
     eof
-    s <- getState
-    debug s
-    return $ Program b
+    getState
 
 parseBlock = braces $ do
     e <- beginBlock
-    debug ("Env " ++ show e)
+    debug $ "Env " ++ show e
     d <- many parseDecl
     s <- many parseStmt
     endBlock
-    return $ Block d s
 -- }}}
 
 -- Declarations {{{
+parseDecl :: Compiler ()
 parseDecl = do
     b <- parseBasicType
     d <- many $ squares natural
     i <- identifier
     semi
     updateState $ addDecl i False (Type b d)
-    return $ Decl (Type b d) i
 
+parseBasicType :: Compiler BasicType
 parseBasicType = (reserved "int" >> return BasicInt)
     <|> (reserved "float" >> return BasicFloat)
 -- }}}
 
 -- Statements {{{
-parseStmt = choice $ map try [ parseAssignment
-                             , parseIfElse
-                             , parseIfStmt
-                             , parseWhile
-                             , parseDoWhile
-                             , parseBreak
-                             , semi >> return StmtEmpty
-                             , fmap StmtBlock parseBlock]
+parseStmt :: Compiler ()
+parseStmt = choice $ map try [
+    parseAssignment,
+    parseIfElse,
+    parseIfStmt,
+    parseWhile,
+    parseDoWhile,
+    parseBreak,
+    semi >> return (),
+    parseBlock]
 
 parseAssignment = do
     l <- parseLoc
     reservedOp "="
     e <- parseExpr
     semi
-    return $ StmtAssign l e
+    case l of
+         ArrayIndex i [] -> codeAppend $
+            Tac InstrAssign (Just e) Nothing (Just $ ArgID i)
+         _ -> fail "Assigning to arrays is not yet supported"
 
 parseIfStmt = do
     reserved "if"
     e <- parens parseExpr
     s <- parseStmt
-    return $ StmtIf e s
+    codeAppend noop
 
 parseIfElse = do
-    StmtIf e s <- parseIfStmt
+    reserved "if"
+    e <- parens parseExpr
+    s <- parseStmt
     reserved "else"
     s' <- parseStmt
-    return $ StmtIfElse e s s'
+    codeAppend noop
 
 parseWhile = do
     reserved "while"
     e <- parens parseExpr
     s <- parseStmt
-    return $ StmtWhile e s
+    codeAppend noop
 
 parseDoWhile = do
     reserved "do"
@@ -119,32 +130,54 @@ parseDoWhile = do
     reserved "while"
     e <- parens parseExpr
     semi
-    return $ StmtDoWhile s e
+    codeAppend noop
 
 parseBreak = do
     reserved "break"
     semi
-    return StmtBreak
+    codeAppend noop
 -- }}}
 
 -- Expressions {{{
+parseLoc :: Compiler ArrayIndex
 parseLoc = do
     i <- identifier
     es <- many $ brackets parseExpr
-    return $ LocIndex i es
+    return $ ArrayIndex i es
 
+parseExpr :: Compiler Arg
 parseExpr = try parseOperator <|> parseFactor
 
+parseFactor :: Compiler Arg
 parseFactor = choice $ map try [
     parens parseExpr,
-    fmap LocExpr parseLoc,
-    fmap LitReal float,
-    fmap LitNum integer,
-    (reserved "true" >> return (LitBool True)),
-    (reserved "false" >> return (LitBool False))]
+    parseLocExpr,
+    fmap ArgReal float,
+    fmap ArgNum integer,
+    (reserved "true" >> return (ArgNum 1)),
+    (reserved "false" >> return (ArgNum 0))]
 
+parseLocExpr = do
+    l <- parseLoc
+    case l of
+         ArrayIndex i [] -> return $ ArgID i
+         _ -> fail "Indeeeexing arrays is not yet supported"
+
+parseOperator :: Compiler Arg
 parseOperator = buildExpressionParser operatorTable parseFactor
 
+binary :: String -> Op -> Operator Char CompilerState Arg
+binary sym op = Infix (do
+    reservedOp sym
+    tmp <- newTemp BasicInt
+    let t = ArgID tmp
+    codeAppend $ Tac (InstrBinary op) (Just arg1) (Just arg2) (Just t)
+    return $ \arg1 arg2 -> t
+    ) AssocLeft
+
+operatorTable = [[binary "+" OpAdd]]
+
+{-
 operatorTable = [
     [prefix "!" OpNot],
     [prefix "-" OpNeg],
@@ -154,8 +187,8 @@ operatorTable = [
     [binary "==" OpEQ, binary "!=" OpNE],
     [binary "&&" OpAnd],
     [binary "||" OpOr]]
-    where binary s f = Infix (reservedOp s >> return (BinExpr f) <?>
-              "operator") AssocLeft
+    where binary s f = Infix (reservedOp s >> return (BinExpr f) <?> "operator") AssocLeft
           prefix s f = Prefix (reservedOp s >> return (UnExpr f) <?>
               "operator")
+-}
 -- }}}

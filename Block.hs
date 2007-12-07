@@ -14,14 +14,19 @@ module Block (
 
 import qualified Data.Map as Map
 
-import Program
 import Tac
 
 data Symbol = Symbol {
     isTemp  :: Bool,
     symType :: Type,
     symAddr :: Int
-} deriving Show
+}
+instance Show Symbol where
+    show s = concat [
+        if isTemp s then "temporary " else "",
+        show $ symType s,
+        " at ",
+        show $ symAddr s]
 
 type SymbolTable = Map.Map ID Symbol
 
@@ -71,14 +76,18 @@ getTemp = ("_t" ++) . show . nextTemp
 resetTemp :: CompilerState -> CompilerState
 resetTemp state = state { nextTemp = 0 }
 
-addDecl :: ID ->   -- ^ symbol name
-           Bool -> -- ^ is temporary
-           Type -> -- ^ kind of variable
+addDecl :: ID ->   -- symbol name
+           Bool -> -- is temporary
+           Type -> -- kind of variable
            CompilerState -> CompilerState
 addDecl i tmp typ state = (modifySymbolTable $
     Map.insert i Symbol { isTemp = tmp, symType = typ, symAddr = addr })
     $ state
     where addr = activationRecord . getLocals $ state
+
+findSymbol :: CompilerState -> ID -> Symbol
+findSymbol state@CompilerState { blocks = bs, locals = env } i =
+    (table $ bs Map.! env) Map.! i
 
 openBlock :: CompilerState -> CompilerState
 openBlock state@CompilerState { blocks = bs, nextEnv = env } =
