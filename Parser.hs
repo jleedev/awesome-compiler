@@ -24,6 +24,9 @@ debug :: String -> Compiler ()
 debug s = return $ trace (">" ++ s) ()
 
 -- State helpers {{{
+choiceTry :: [Compiler a] -> Compiler a
+choiceTry = choice . map try
+
 newLabel :: Compiler Label
 newLabel = do
     l <- fmap getLabel getState
@@ -51,6 +54,10 @@ codeAppend :: Tac -> Compiler ()
 codeAppend c = do
     s <- getState
     setState s { code = code s ++ [c] }
+
+--codeReserve :: Compiler Int
+--codeModify :: Int -> Tac -> Compiler()
+
 -- }}}
 
 -- Blocks {{{
@@ -84,7 +91,7 @@ parseBasicType = (reserved "int" >> return BasicInt)
 
 -- Statements {{{
 parseStmt :: Compiler ()
-parseStmt = choice $ map try [
+parseStmt = choiceTry [
     parseAssignment,
     parseIfElse,
     parseIfStmt,
@@ -146,10 +153,44 @@ parseLoc = do
     return $ ArrayIndex i es
 
 parseExpr :: Compiler Arg
-parseExpr = try parseOperator <|> parseFactor
+parseExpr = parseOr
+
+parseOr, parseAnd, parseEq, parseRel, parseAdd, parseProd, parseUnary
+    :: Compiler Arg
+
+parseOr = binary "||" OpOr parseAnd
+parseAnd = binary "&&" OpAnd parseEq
+parseEq = choiceTry $ g parseRel [binary "==" OpEQ, binary "!=" OpNE]
+parseRel = choiceTry $ g parseAdd [binary "<=" OpLE, binary "<" OpLT,
+    binary ">=" OpGT, binary ">" OpGT]
+parseAdd = choiceTry $ g parseProd [binary "+" OpAdd, binary "-" OpSub]
+parseProd = choiceTry $ g parseUnary [binary "*" OpMul, binary "/" OpDiv]
+parseUnary = choiceTry $ g parseFactor [unary "!" OpNot, unary "-" OpNeg]
+g = map . flip ($)
+
+unary :: String -> Op -> Compiler Arg -> Compiler Arg
+unary op opcode base = (do
+    reservedOp op
+    a1 <- base
+    tmp <- newTemp BasicInt
+    let t = ArgID tmp
+    codeAppend $ Tac (InstrUnary opcode) (Just a1) Nothing (Just t)
+    return t)
+  <|> base
+
+binary :: String -> Op -> Compiler Arg -> Compiler Arg
+binary op opcode base = (try $ do
+    a1 <- base
+    reservedOp op
+    a2 <- parseFactor
+    tmp <- newTemp BasicInt
+    let t = ArgID tmp
+    codeAppend $ Tac (InstrBinary opcode) (Just a1) (Just a2) (Just t)
+    return t)
+ <|> base
 
 parseFactor :: Compiler Arg
-parseFactor = choice $ map try [
+parseFactor = choiceTry [
     parens parseExpr,
     parseLocExpr,
     fmap ArgReal float,
@@ -161,34 +202,6 @@ parseLocExpr = do
     l <- parseLoc
     case l of
          ArrayIndex i [] -> return $ ArgID i
-         _ -> fail "Indeeeexing arrays is not yet supported"
+         _ -> fail "Indexing arrays is not yet supported"
 
-parseOperator :: Compiler Arg
-parseOperator = buildExpressionParser operatorTable parseFactor
-
-binary :: String -> Op -> Operator Char CompilerState Arg
-binary sym op = Infix (do
-    reservedOp sym
-    tmp <- newTemp BasicInt
-    let t = ArgID tmp
-    codeAppend $ Tac (InstrBinary op) (Just arg1) (Just arg2) (Just t)
-    return $ \arg1 arg2 -> t
-    ) AssocLeft
-
-operatorTable = [[binary "+" OpAdd]]
-
-{-
-operatorTable = [
-    [prefix "!" OpNot],
-    [prefix "-" OpNeg],
-    [binary "*" OpMul, binary "/" OpDiv],
-    [binary "+" OpAdd, binary "-" OpSub],
-    [binary "<" OpLT, binary ">" OpGT, binary "<=" OpLE, binary ">=" OpGE],
-    [binary "==" OpEQ, binary "!=" OpNE],
-    [binary "&&" OpAnd],
-    [binary "||" OpOr]]
-    where binary s f = Infix (reservedOp s >> return (BinExpr f) <?> "operator") AssocLeft
-          prefix s f = Prefix (reservedOp s >> return (UnExpr f) <?>
-              "operator")
--}
 -- }}}
