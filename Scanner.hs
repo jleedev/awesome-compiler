@@ -1,28 +1,34 @@
+-- | A helper module to parse lexical elements (tokens). See
+-- <http://haskell.org/ghc/docs/latest/html/libraries/parsec-2.1.0.0/Text-ParserCombinators-Parsec-Token.html>.
 module Scanner (
-    lexicalRules, lexer, identifier, reserved, operator, reservedOp,
-    charLiteral, stringLiteral, natural, integer, float, naturalOrFloat,
-    decimal, hexadecimal, octal, symbol, lexeme, whiteSpace, parens, braces,
-    angles, brackets, squares, semi, comma, colon, dot, semiSep, semiSep1,
-    commaSep, commaSep1,
+    lexicalRules,
+    identifier, reserved, operator, reservedOp, charLiteral,
+    stringLiteral, natural, integer, float, naturalOrFloat, decimal,
+    hexadecimal, octal, symbol, lexeme, whiteSpace, parens, braces,
+    angles, brackets, squares, semi, comma, colon, dot, semiSep,
+    semiSep1, commaSep, commaSep1
 ) where
 
 import Text.ParserCombinators.Parsec
 import Text.ParserCombinators.Parsec.Language
 import qualified Text.ParserCombinators.Parsec.Token as T
 
-lexicalRules = LanguageDef
-    { commentStart   = "/*"
-    , commentEnd     = "*/"
-    , commentLine    = "//"
-    , nestedComments = True
-    , identStart     = letter
-    , identLetter    = alphaNum <|> char '_'
-    , opStart = oneOf "=+-*/<>=!&|"
-    , opLetter = opStart lexicalRules
-    , reservedNames = words "if else do while break int float true false"
-    , reservedOpNames = words "+ - * / < > == != <= >= && || !"
-    , caseSensitive  = True
-    }
+-- | Give Parsec clues about where a lexeme should end. Specifically,
+-- instruct it on what our reserved keywords and operator names are.
+lexicalRules :: LanguageDef st
+lexicalRules = LanguageDef {
+    commentStart   = "/*",
+    commentEnd     = "*/",
+    commentLine    = "//",
+    nestedComments = True,
+    identStart     = letter,
+    identLetter    = alphaNum <|> char '_',
+    opStart = oneOf "=+-*/<>=!&|",
+    opLetter = opStart lexicalRules,
+    reservedNames = words "if else do while break int float true false",
+    reservedOpNames = words "+ - * / < > == != <= >= && || !",
+    caseSensitive  = True
+}
 
 lexer = T.makeTokenParser lexicalRules
 
